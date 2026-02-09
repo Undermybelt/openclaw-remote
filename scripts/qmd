@@ -1,0 +1,5 @@
+#!/bin/bash
+# QMD wrapper script for OpenClaw
+# Usage: qmd <command> [args]
+
+cd /tmp/qmd-install && bun run qmd "$@"

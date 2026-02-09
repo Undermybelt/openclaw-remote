@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "skills": {
+    "tavily-search": {
+      "version": "1.0.0",
+      "installedAt": 1770443608077
+    },
+    "find-skills": {
+      "version": "0.1.0",
+      "installedAt": 1770443612648
+    },
+    "proactive-agent": {
+      "version": "3.1.0",
+      "installedAt": 1770469751917
+    },
+    "MoltThreats": {
+      "version": "0.6.0",
+      "installedAt": 1770549921077
+    }
+  }
+}

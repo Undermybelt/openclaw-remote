@@ -1,0 +1,49 @@
+# OpenClaw Workspace .gitignore
+# Protect sensitive files from being committed
+
+# Environment files (may contain secrets)
+.env
+.env.*
+*.env
+
+# Secret files
+*secret*
+*password*
+*credential*
+*.pem
+*.key
+
+SYSTEM-STATE.md
+
+# Log files
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Checkpoint files may contain user IDs
+# memory/checkpoints/
+
+# Beads database (local state)
+.beads/*.db
+.beads/*.sqlite
+.beads/export-state/
