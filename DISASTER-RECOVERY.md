@@ -1,195 +1,251 @@
 # OpenClaw 灾难恢复手册
 
-> 最后更新：2026-02-09
-> 优先级：P2
-> 状态：✅ 已创建
+> 最后更新：2026-02-09 20:30
+> 恢复时间目标 (RTO)：30 分钟
+> 恢复点目标 (RPO)：1 小时（取决于最后备份）
 
 ---
 
-## 🚨 紧急情况分类
+## 🚨 紧急联系人
 
-| 级别 | 描述 | 响应时间 |
-|------|------|----------|
-| **P0** | Gateway 完全宕机，无法启动 | 立即 |
-| **P1** | 数据丢失（workspace/skills 被删） | 1 小时内 |
-| **P2** | 配置损坏，部分功能失效 | 4 小时内 |
-
----
-
-## 📦 备份位置
-
-| 内容 | 位置 | 频率 |
-|------|------|------|
-| **Workspace Git** | `git@github.com:Undermybelt/openclaw-remote.git` | 手动 push |
-| **OpenClaw 配置** | `~/.openclaw/openclaw.json` | 无自动备份 |
-| **系统 Crontab** | 本地，需手动导出 | - |
-| **Skills 列表** | 见本文档附录 | - |
+| 角色 | 联系方式 |
+|------|----------|
+| 主要负责人 | Shagaku (Discord) |
+| Healthchecks 告警 | 配置了通知渠道 |
 
 ---
 
-## 🔄 恢复流程
+## 📋 灾难场景与恢复步骤
 
-### 场景 1: Gateway 无法启动
+### 场景 1：OpenClaw Gateway 崩溃
 
+**症状**：Healthchecks 连续失败，Discord/Telegram 无响应
+
+**恢复步骤**：
 ```bash
-# 1. 检查进程
-ps aux | grep openclaw
+# 1. SSH 到服务器（如果是远程）
+ssh user@server
 
-# 2. 查看日志
+# 2. 检查 gateway 状态
+openclaw gateway status
+
+# 3. 查看日志
 tail -100 ~/.openclaw/logs/gateway.log
 
-# 3. 重启 Gateway
-openclaw gateway stop
-openclaw gateway start
+# 4. 重启 gateway
+openclaw gateway restart
 
-# 4. 如果还不行，重启 Node
-# (如果有 PM2)
-pm2 restart openclaw-gateway
+# 5. 验证恢复
+openclaw gateway status
+curl http://localhost:3000/health  # 如果有健康检查端点
 ```
 
-### 场景 2: Workspace 丢失
+**预计恢复时间**：5 分钟
 
+---
+
+### 场景 2：服务器/机器完全丢失
+
+**症状**：机器无法访问，硬件故障，云服务宕机
+
+**恢复步骤**：
+
+#### Step 1: 准备新机器
 ```bash
-# 1. 克隆仓库
+# 确保系统是 macOS/Linux
+# 安装 Node.js (v18+)
+# 安装 Homebrew (macOS)
+```
+
+#### Step 2: 克隆配置仓库
+```bash
+# 从 GitHub 克隆 workspace
 git clone git@github.com:Undermybelt/openclaw-remote.git ~/.openclaw/workspace
-
-# 2. 恢复子模块
-cd ~/.openclaw/workspace
-git submodule update --init --recursive
-
-# 3. 恢复环境变量
-# 手动设置 HEALTHCHECK_URL 等敏感变量
 ```
 
-### 场景 3: OpenClaw 配置损坏
-
+#### Step 3: 安装 OpenClaw
 ```bash
-# 1. 查看当前配置
-cat ~/.openclaw/openclaw.json
-
-# 2. 重新配置 API Keys
-openclaw config edit
-
-# 需要重新配置的 Keys:
-# - TAVILY_API_KEY
-# - WECHAT_MP_APPID
-# - WECHAT_MP_SECRET
-# - PROMPTINTEL_API_KEY
-# - Discord Bot Token
+npm install -g openclaw
 ```
 
-### 场景 4: Cron 任务丢失
-
+#### Step 4: 恢复配置文件
 ```bash
-# 1. 检查 OpenClaw cron
+# 从备份恢复 openclaw.json（包含 API keys）
+# 选项 A: 从加密云存储下载
+# 选项 B: 从 1Password/Bitwarden 获取
+# 选项 C: 手动重新配置
+
+cp ~/Downloads/openclaw.json ~/.openclaw/openclaw.json
+```
+
+#### Step 5: 安装依赖
+```bash
+# 安装系统依赖
+brew install node
+
+# 安装全局 npm 包
+npm install -g pnpm bun
+
+# 安装 Playwriter（如需要）
+npm install -g @anthropic/playwriter
+```
+
+#### Step 6: 恢复 Cron 任务
+```bash
+# 检查 cron 任务
 openclaw cron list
 
-# 2. 如果为空，重新创建 Twitter 摘要任务
-# 见附录 A：Cron 任务配置
+# 如果丢失，从 workspace/memory/checkpoints/ 恢复
+# 手动重新创建任务
 ```
 
-### 场景 5: Skills 丢失
-
+#### Step 7: 验证
 ```bash
-# 1. 检查已安装 Skills
-ls ~/.openclaw/skills/
-ls ~/.openclaw/workspace/skills/
+# 启动 gateway
+openclaw gateway start
 
-# 2. 重新安装（见附录 B：Skills 列表）
+# 检查健康状态
+curl $HEALTHCHECK_URL
+
+# 测试 Discord 消息
+# 让用户在 Discord 发消息测试
 ```
 
----
-
-## 🔐 敏感信息恢复
-
-**⚠️ 以下信息不在 Git 中，需要手动恢复：**
-
-| 变量 | 存储位置 | 获取方式 |
-|------|----------|----------|
-| `HEALTHCHECK_URL` | 环境变量 | Healthchecks.io Dashboard |
-| `TAVILY_API_KEY` | openclaw.json | https://tavily.com/ |
-| `WECHAT_MP_APPID` | openclaw.json | 微信公众平台 |
-| `WECHAT_MP_SECRET` | openclaw.json | 微信公众平台 |
-| `PROMPTINTEL_API_KEY` | openclaw.json | MoltThreats |
-| Discord Bot Token | openclaw.json | Discord Developer Portal |
+**预计恢复时间**：30 分钟
 
 ---
 
-## 📋 附录 A: Cron 任务配置
+### 场景 3：配置/密钥泄露
 
-### Twitter 时间线摘要（每 30 分钟）
+**症状**：发现 API key 被滥用，GitHub token 泄露
 
+**立即行动**：
+1. **撤销泄露的密钥**（最优先！）
+   - Twitter/X: 开发者平台重新生成
+   - Discord: Bot Token 重新生成
+   - GitHub: Settings > Developer settings > Personal access tokens > 撤销
+   - OpenAI/Anthropic: API Keys 页面撤销
+
+2. **轮换所有相关密钥**
+   ```bash
+   # 编辑配置文件
+   nano ~/.openclaw/openclaw.json
+   
+   # 更新所有可能受影响的密钥
+   ```
+
+3. **检查日志确认未被发现**
+   ```bash
+   # 检查是否有可疑活动
+   grep -r "suspicious" ~/.openclaw/logs/
+   ```
+
+4. **提交清理后的代码**
+   ```bash
+   # 确保没有密钥在 git 历史中
+   git filter-branch --force --index-filter \
+     "git rm --cached --ignore-unmatch PATH_TO_FILE" \
+     --prune-empty --tag-name-filter cat -- --all
+   ```
+
+---
+
+### 场景 4：Git 仓库损坏/丢失
+
+**症状**：`git status` 报错，无法 push/pull
+
+**恢复步骤**：
 ```bash
-openclaw cron add --name "Twitter 30min Summary" \
-  --schedule "*/30 * * * *" \
-  --session-target isolated \
-  --payload '使用 Playwriter 抓取 Twitter 首页时间线，筛选后发送到 Discord DM。筛选标准：MCP/Skills、前沿AI、免费资源、赚钱、有趣洞见。'
+# 1. 备份当前状态
+cp -r ~/.openclaw/workspace ~/workspace-backup
+
+# 2. 重新克隆
+rm -rf ~/.openclaw/workspace
+git clone git@github.com:Undermybelt/openclaw-remote.git ~/.openclaw/workspace
+
+# 3. 如果本地有未推送的更改，从备份恢复
+# 手动合并需要的文件
 ```
 
 ---
 
-## 📋 附录 B: Skills 列表
+### 场景 5：Playwriter/Chrome 连接丢失
 
-### 全局 Skills (`~/.openclaw/skills/`)
+**症状**：Twitter 摘要 cron 失败，"Playwriter session not found"
 
-| Skill | 安装命令 |
-|-------|----------|
-| tavily-search | `clawhub install tavily-search` |
-| humanizer | `clawhub install humanizer` |
-| proactive-agent | `clawhub install proactive-agent` |
-| planning-with-files | `clawhub install planning-with-files` |
-| md2wechat | `curl -fsSL ... \| bash` (见 GitHub) |
-
-### Workspace Skills (`~/.openclaw/workspace/skills/`)
-
-| Skill | 来源 |
-|-------|------|
-| playwriter-skill | Git submodule |
-| superpowers | Git submodule |
-| MoltThreats | Git submodule |
-| anthropic-docx/pdf/pptx/xlsx | Git submodule |
-| remotion-skills | Git submodule |
-| yt-dlp-downloader-skill | Git submodule |
-
----
-
-## 📋 附录 C: 系统依赖
-
+**恢复步骤**：
 ```bash
-# Node.js 版本
-node -v  # 应为 v22+
+# 1. 确保 Chrome 已打开
+open -a "Google Chrome"
 
-# 全局 NPM 包
-npm list -g --depth=0
+# 2. 检查 Playwriter 扩展状态
+# 点击扩展图标，确保显示绿色/已连接
 
-# Homebrew 包（macOS）
-brew list
+# 3. 重新创建 session
+export PATH="$HOME/.npm-global/bin:$PATH"
+playwriter session new
 
-# 关键 CLI
-which openclaw
-which playwriter
-which agent-browser
+# 4. 记录新 session ID（通常是 1）
+playwriter session list
+
+# 5. 更新 cron 任务中的 session ID（如果变化）
 ```
 
 ---
 
-## 📞 联系方式
+## 📦 备份策略
 
-- **OpenClaw 官方文档**: https://docs.openclaw.ai
-- **OpenClaw Discord**: https://discord.com/invite/clawd
-- **GitHub Issues**: https://github.com/openclaw/openclaw/issues
+### 自动备份
+- **Git 仓库**：每次 `git push` 自动备份到 GitHub
+- **心跳监控**：每 5 分钟检查 gateway 状态
+
+### 手动备份（建议频率：每周）
+```bash
+# 运行备份脚本
+~/.openclaw/workspace/scripts/backup.sh
+
+# 或手动导出状态
+~/.openclaw/workspace/scripts/export-state.sh
+```
+
+### 应备份的关键文件
+| 文件 | 位置 | 包含内容 | 备份方式 |
+|------|------|----------|----------|
+| openclaw.json | ~/.openclaw/ | API keys, 配置 | 加密云存储/1Password |
+| workspace/ | ~/.openclaw/workspace/ | 记忆、技能、脚本 | Git |
+| .env (如有) | 各技能目录 | 环境变量 | 加密云存储 |
 
 ---
 
-## ✅ 恢复后检查清单
+## ✅ 恢复验证清单
+
+恢复后必须验证：
 
 - [ ] Gateway 正常运行 (`openclaw gateway status`)
-- [ ] 心跳正常 (Healthchecks.io 显示绿色)
-- [ ] Cron 任务运行中 (`openclaw cron list`)
-- [ ] Discord bot 在线
-- [ ] Playwriter 可用 (`playwriter session list`)
+- [ ] Healthchecks 收到成功心跳
+- [ ] Discord/Telegram 消息正常收发
+- [ ] Cron 任务正常运行 (`openclaw cron list`)
+- [ ] Playwriter 连接正常 (如使用)
 - [ ] 关键 Skills 可用
 
 ---
 
-*此文档应定期更新，特别是在添加新 Skills 或修改配置后。*
+## 🔧 预防措施
+
+1. **定期备份**：每周运行备份脚本
+2. **监控告警**：Healthchecks 配置邮件/Webhook 通知
+3. **密钥管理**：使用 1Password/Bitwarden 存储，不在代码中硬编码
+4. **文档更新**：重大变更后更新此手册
+5. **定期演练**：每月检查一次恢复流程是否可行
+
+---
+
+## 📝 版本历史
+
+| 日期 | 变更 |
+|------|------|
+| 2026-02-09 | 初始版本 |
+
+---
+
+**记住**：最关键的是先保护好密钥，其他都可以从 Git 恢复！
